@@ -1,0 +1,21 @@
+# Python cache files
+app/__pycache__/
+*.py[cod]
+*.pyc
+
+
+# Database files
+*.db
+product_matcher.db
+
+# Model and data files
+app/models/
+app/data/
+*.npy
+features.npy
+image_paths.txt
+categories.txt
+
+# Upload folders
+app/app/uploads/
+app/static/uploads/
