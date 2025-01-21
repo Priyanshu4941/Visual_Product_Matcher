@@ -160,166 +160,83 @@ def find_similar_products(query_features, num_results=8):
 def index():
     return render_template('index.html', images=None)
 
-@app.route('/', methods=['POST'])
+@app.route('/', methods=['GET', 'POST'])
 def upload_file():
-    try:
-        image = None
-        saved_path = None
-        preview_image = None
-        print("Upload request received")
-        
-        # Ensure folders exist
-        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-        os.makedirs(os.path.join('static', 'uploads'), exist_ok=True)
-        
-        if 'file' in request.files:
-            # Handle file upload
+    if request.method == 'POST':
+        try:
+            if 'file' not in request.files:
+                return render_template('index.html', error="No file provided")
+            
             file = request.files['file']
-            if file and file.filename != '':
-                if allowed_file(file.filename):
+            if file.filename == '':
+                return render_template('index.html', error="No selected file")
+
+            if file and allowed_file(file.filename):
+                # Process the file
+                try:
+                    # Generate unique filename
                     filename = secure_filename(file.filename)
                     unique_filename = f"{uuid.uuid4()}_{filename}"
                     saved_path = os.path.join(UPLOAD_FOLDER, unique_filename)
                     
+                    # Save file
                     file.save(saved_path)
                     print(f"File saved to: {saved_path}")
                     
+                    # Open and process image
                     image = Image.open(saved_path).convert('RGB')
                     
+                    # Save a copy to static folder for preview
                     static_path = os.path.join('static', 'uploads', unique_filename)
                     image.save(static_path)
                     
                     preview_image = f"uploads/{unique_filename}"
-                    print("File uploaded and processed successfully")
-                else:
-                    return render_template('index.html', error="Invalid file type")
                     
-        elif 'imageUrl' in request.form:
-            url = request.form['imageUrl'].strip()
-            if url:
-                try:
-                    print(f"Downloading image from URL: {url}")
+                    # Extract features
+                    print("Extracting features...")
+                    query_features = extract_features(image)
+                    print("Features extracted successfully")
+
+                    # Find similar products
+                    print("Finding similar products...")
+                    similar_products = find_similar_products(query_features)
+                    print(f"Found {len(similar_products)} similar products")
+
+                    # Format results
+                    formatted_products = []
+                    seen_paths = set()
                     
-                    # Add headers to mimic a browser request
-                    headers = {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                    }
-                    
-                    # Download image with timeout and stream options
-                    response = requests.get(
-                        url, 
-                        headers=headers, 
-                        timeout=15, 
-                        stream=True,
-                        verify=False  # Only if needed for SSL issues
-                    )
-                    response.raise_for_status()
-                    
-                    # Get content type and extension
-                    content_type = response.headers.get('content-type', '').lower()
-                    
-                    # Determine file extension
-                    if 'jpeg' in content_type or 'jpg' in content_type:
-                        ext = '.jpg'
-                    elif 'png' in content_type:
-                        ext = '.png'
-                    elif 'webp' in content_type:
-                        ext = '.webp'
-                    else:
-                        return render_template('index.html', error="Unsupported image format")
-                    
-                    # Generate unique filename
-                    unique_filename = f"url_image_{uuid.uuid4()}{ext}"
-                    saved_path = os.path.join(UPLOAD_FOLDER, unique_filename)
-                    static_path = os.path.join('static', 'uploads', unique_filename)
-                    
-                    # Save the downloaded image
-                    with open(saved_path, 'wb') as f:
-                        for chunk in response.iter_content(chunk_size=8192):
-                            if chunk:
-                                f.write(chunk)
-                    
-                    # Open and verify the image
-                    try:
-                        image = Image.open(saved_path)
-                        # Convert to RGB if necessary
-                        if image.mode in ('RGBA', 'P'):
-                            image = image.convert('RGB')
-                        
-                        # Save a copy to static folder
-                        image.save(static_path)
-                        
-                        preview_image = f"uploads/{unique_filename}"
-                        print(f"URL image saved successfully: {saved_path}")
-                        
-                    except Exception as e:
-                        if os.path.exists(saved_path):
-                            os.remove(saved_path)
-                        if os.path.exists(static_path):
-                            os.remove(static_path)
-                        raise Exception(f"Invalid image file: {str(e)}")
-                    
-                except requests.exceptions.RequestException as e:
-                    error_msg = f"Failed to download image: {str(e)}"
-                    print(error_msg)
-                    return render_template('index.html', error=error_msg)
+                    for product in similar_products:
+                        if product['path'] not in seen_paths:
+                            seen_paths.add(product['path'])
+                            formatted_products.append({
+                                'path': product['path'],
+                                'category': product['category'],
+                                'similarity': f"{float(product['similarity']):.2f}"
+                            })
+
+                    # Clean up old files
+                    cleanup_old_uploads()
+
+                    return render_template('index.html', 
+                                        images=formatted_products,
+                                        preview_image=preview_image)
+
                 except Exception as e:
-                    error_msg = f"Error processing URL image: {str(e)}"
-                    print(error_msg)
-                    return render_template('index.html', error=error_msg)
+                    if saved_path and os.path.exists(saved_path):
+                        os.remove(saved_path)
+                    raise Exception(f"Error processing image: {str(e)}")
             else:
-                return render_template('index.html', error="Please provide a valid image URL")
-        
-        if image is None:
-            return render_template('index.html', error="No valid image provided")
+                return render_template('index.html', error="Invalid file type")
 
-        # Extract features
-        print("Extracting features...")
-        query_features = extract_features(image)
-        print("Features extracted successfully")
+        except Exception as e:
+            print(f"Error in upload_file: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return render_template('index.html', error=str(e))
 
-        # Find similar products
-        print("Finding similar products...")
-        similar_products = find_similar_products(query_features)
-        print(f"Found {len(similar_products)} similar products")
+    return render_template('index.html')
 
-        # Format results
-        formatted_products = []
-        seen_paths = set()
-        
-        for product in similar_products:
-            if product['path'] not in seen_paths:
-                seen_paths.add(product['path'])
-                formatted_products.append({
-                    'path': product['path'],
-                    'category': product['category'],
-                    'similarity': f"{float(product['similarity']):.2f}"
-                })
-
-        print(f"Formatted {len(formatted_products)} unique products")
-
-        # Clean up old files
-        cleanup_old_uploads()
-
-        return render_template('index.html', 
-                             images=formatted_products,
-                             preview_image=preview_image)
-
-    except Exception as e:
-        print(f"Error in upload_file: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return render_template('index.html', error=str(e))
-
-# Add helper function to validate URLs
-def is_valid_image_url(url):
-    """Check if the URL points to a valid image"""
-    try:
-        response = requests.head(url, timeout=5)
-        content_type = response.headers.get('content-type', '').lower()
-        return any(img_type in content_type for img_type in ['jpeg', 'jpg', 'png', 'webp'])
-    except:
-        return False
 
 # Add function to handle different image formats
 def process_image(image):

@@ -3,74 +3,110 @@ if (window.history.replaceState) {
     window.history.replaceState(null, null, window.location.href);
 }
 
-function toggleInputs(type) {
-    const fileInput = document.getElementById('file');
-    const urlInput = document.getElementById('imageUrl');
-    const imagePreviewText = document.getElementById('imagePreviewText');
-    const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+// Single function to handle image preview
+function showImagePreview(imageSource) {
     const imagePreview = document.getElementById('imagePreview');
+    const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+    const imagePreviewText = document.getElementById('imagePreviewText');
 
     // Clear previous preview
     imagePreview.innerHTML = '';
 
-    if (type === 'file' && fileInput.files[0]) {
-        urlInput.value = '';
-        const file = fileInput.files[0];
-        
-        if (!file.type.startsWith('image/')) {
-            alert('Please upload a valid image file.');
-            fileInput.value = '';
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const img = document.createElement('img');
-            img.src = e.target.result;
-            img.style.maxWidth = '100%';
-            img.style.maxHeight = '300px';
-            img.style.objectFit = 'contain';
-            imagePreview.appendChild(img);
-            
-            imagePreviewText.style.display = 'block';
-            imagePreviewContainer.style.display = 'block';
-        };
-        reader.readAsDataURL(file);
-    } 
-    else if (type === 'url' && urlInput.value) {
-        fileInput.value = '';
-        const img = document.createElement('img');
-        img.src = urlInput.value;
-        img.style.maxWidth = '100%';
-        img.style.maxHeight = '300px';
-        img.style.objectFit = 'contain';
-        
-        img.onload = function() {
-            imagePreview.appendChild(img);
-            imagePreviewText.style.display = 'block';
-            imagePreviewContainer.style.display = 'block';
-        };
-        
-        img.onerror = function() {
-            alert('Invalid image URL or image not found.');
-            urlInput.value = '';
-        };
-    }
+    const img = document.createElement('img');
+    img.src = imageSource;
+    img.style.maxWidth = '100%';
+    img.style.maxHeight = '300px';
+    img.style.objectFit = 'contain';
+    
+    imagePreview.appendChild(img);
+    imagePreviewText.style.display = 'block';
+    imagePreviewContainer.style.display = 'block';
 }
 
+// Handle file input
+document.getElementById('file').addEventListener('change', function() {
+    const urlInput = document.getElementById('imageUrl');
+    urlInput.value = ''; // Clear URL input
+
+    if (this.files && this.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            showImagePreview(e.target.result);
+        };
+        reader.readAsDataURL(this.files[0]);
+    }
+});
+
+// Handle URL input
+document.getElementById('imageUrl').addEventListener('input', async function() {
+    const fileInput = document.getElementById('file');
+    fileInput.value = ''; // Clear file input
+    
+    const url = this.value.trim();
+    if (url) {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Failed to fetch image');
+            
+            const blob = await response.blob();
+            if (!blob.type.startsWith('image/')) {
+                throw new Error('Invalid image format');
+            }
+
+            const imageUrl = URL.createObjectURL(blob);
+            showImagePreview(imageUrl);
+        } catch (error) {
+            alert('Error loading image: ' + error.message);
+            this.value = '';
+        }
+    }
+});
+
 // Form submission handler
-document.getElementById('imageForm').addEventListener('submit', function(event) {
+document.getElementById('imageForm').addEventListener('submit', async function(event) {
+    event.preventDefault();
+    
     const fileInput = document.getElementById('file');
     const urlInput = document.getElementById('imageUrl');
     const submitButton = this.querySelector('button[type="submit"]');
 
     if (!fileInput.files[0] && !urlInput.value.trim()) {
-        event.preventDefault();
         alert('Please upload an image or provide an image URL');
         return;
     }
 
-    // Show loading state
-    submitButton.disabled = true;
-    submitButton.textContent = 'Searching...';
+    try {
+        submitButton.disabled = true;
+        submitButton.textContent = 'Processing...';
+
+        const formData = new FormData();
+
+        if (fileInput.files[0]) {
+            formData.append('file', fileInput.files[0]);
+        } else if (urlInput.value.trim()) {
+            const response = await fetch(urlInput.value.trim());
+            if (!response.ok) throw new Error('Failed to fetch image');
+            
+            const blob = await response.blob();
+            formData.append('file', blob, 'url_image.jpg');
+        }
+
+        const response = await fetch('/', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to process image');
+        }
+
+        const htmlResponse = await response.text();
+        document.documentElement.innerHTML = htmlResponse;
+
+    } catch (error) {
+        alert('Error: ' + error.message);
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Search';
+    }
 });
