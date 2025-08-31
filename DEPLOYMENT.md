@@ -14,7 +14,7 @@ pip install -r ../requirements.txt
 
 ### **3. Start Command**
 ```
-gunicorn app:app
+gunicorn app:app --chdir app
 ```
 
 ## 📁 **Project Structure for Render**
@@ -35,7 +35,7 @@ Visual_Product_Matcher/
 
 - **Root Directory**: `app/` (where your Flask app lives)
 - **Build Command**: `pip install -r ../requirements.txt` (installs from parent directory)
-- **Start Command**: `gunicorn app:app` (runs app.py from current directory)
+- **Start Command**: `gunicorn app:app --chdir app` (moves to app/ directory first, then runs app.py)
 
 ## 🎯 **Environment Variables**
 - `PYTHON_VERSION`: `3.9.16`
