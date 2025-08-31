@@ -64,9 +64,15 @@
                     <div class="similar-products-grid">
                         {% for image in images %}
                             <div class="product-card">
-                                <img src="{{ url_for('static', filename=image.path) }}" 
-                                    alt="Similar product" 
-                                    class="similar-image">
+                                {% if image.path.startswith('http') %}
+                                    <img src="{{ image.path }}" 
+                                        alt="Similar product" 
+                                        class="similar-image">
+                                {% else %}
+                                    <img src="{{ url_for('static', filename=image.path) }}" 
+                                        alt="Similar product" 
+                                        class="similar-image">
+                                {% endif %}
                                 <div class="product-info">
                                     <p class="category">Category: {{ image.category }}</p>
                                     <p class="similarity">Similarity: {{ image.similarity }}</p>

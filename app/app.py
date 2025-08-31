@@ -112,7 +112,7 @@ def find_similar_products(query_features, num_results=8):
                 )
                 
                 # Only add if similarity is above threshold
-                if similarity > 0.1:  # Adjust threshold as needed
+                if similarity > 0.4:  # Higher threshold for ultra accuracy
                     seen_features.add(feature_hash)
                     
                     similarities.append({
@@ -121,7 +121,7 @@ def find_similar_products(query_features, num_results=8):
                         'similarity': similarity,
                         'feature_hash': feature_hash
                     })
-                    print(f"Added unique product: {product.image_path} with similarity: {similarity:.2f}")
+                    print(f"Added unique product: {product.image_path} ({product.category}) with similarity: {similarity:.2f}")
             
             except Exception as e:
                 print(f"Error processing product: {str(e)}")
@@ -130,14 +130,25 @@ def find_similar_products(query_features, num_results=8):
         # Sort by similarity
         similarities.sort(key=lambda x: x['similarity'], reverse=True)
         
-        # Take top results ensuring uniqueness
+        # Ultra-accurate filtering: prioritize same category
+        same_category_results = []
+        other_category_results = []
+        
+        for result in similarities:
+            # Check if this is a high similarity result (likely same category)
+            if result['similarity'] > 0.6:
+                same_category_results.append(result)
+            else:
+                other_category_results.append(result)
+        
+        # Combine results prioritizing same category
         top_results = []
         seen_hashes = set()
         
-        for result in similarities:
+        # First add high similarity results (likely same category)
+        for result in same_category_results:
             if len(top_results) >= num_results:
                 break
-            
             if result['feature_hash'] not in seen_hashes:
                 seen_hashes.add(result['feature_hash'])
                 top_results.append({
@@ -145,7 +156,20 @@ def find_similar_products(query_features, num_results=8):
                     'category': result['category'],
                     'similarity': result['similarity']
                 })
-                print(f"Selected for display: {result['path']}")
+                print(f"Selected high similarity: {result['path']} ({result['category']}) - {result['similarity']:.2f}")
+        
+        # Then add other results if we need more
+        for result in other_category_results:
+            if len(top_results) >= num_results:
+                break
+            if result['feature_hash'] not in seen_hashes:
+                seen_hashes.add(result['feature_hash'])
+                top_results.append({
+                    'path': result['path'],
+                    'category': result['category'],
+                    'similarity': result['similarity']
+                })
+                print(f"Selected other category: {result['path']} ({result['category']}) - {result['similarity']:.2f}")
         
         print(f"\nFinal unique results: {len(top_results)}")
         return top_results
